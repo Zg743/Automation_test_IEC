@@ -1,7 +1,7 @@
 from random import randint
 
-from kf_iec import *
-# from kf_iec_info import kf_info
+from kf_IEC import *
+# from kf.info import kf_info
 
 def clock_iec_1():
     conn = IEC62056ModeE("com3")

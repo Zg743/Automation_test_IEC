@@ -2,9 +2,9 @@ import time
 import serial
 import re
 from typing import List, Dict, Tuple, Optional
-from kf_iec_datetime import *
-from kf_iec_energy import *
-from kf_iec_info import *
+from .kf_iec_datetime import *
+from .kf_iec_energy import *
+from .kf_iec_info import *
 
 # 控制字符的可读名称（用于报文打印）
 _CTRL_NAMES = {

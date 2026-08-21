@@ -1,7 +1,6 @@
 from random import randint
 
-from kf_iec import *
-from kf_iec_info import kf_info
+from kf_IEC import *
 
 
 def clock_iec_1():

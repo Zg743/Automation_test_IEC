@@ -14,8 +14,9 @@ def info(*args, **kwargs):
     print(*args, **kwargs)
 
 
-# 日志存放目录
-LOG_DIR = "Log"
+# 日志存放目录（固定在项目根目录下的 Log，不受运行脚本时的工作目录影响）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_DIR = os.path.join(PROJECT_ROOT, "Log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # 全局变量：保存当前使用的 logger 和对应的小时标识
