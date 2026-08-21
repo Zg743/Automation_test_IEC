@@ -150,4 +150,36 @@
    **kf_info(*args, **kwargs)**
    - 含义：控制台打印 + 写日志同时进行，测试脚本中推荐统一使用它代替 print
 
+   ---
+
+   ### 五、测试脚本标签与按标签运行（kf_IEC/kf_iec_tag.py）
+
+   **@kf_tag(*tags)**
+   - 含义：装饰器，写在测试函数定义的上一行，给该函数打标签并注册到全局注册表
+   - 传参：tags：一个或多个标签字符串，一般第一个写同类脚本的公共前缀，最后一个写脚本自己的全名
+   - 返回：原函数（不改变函数本身）
+   - 示例：
+
+         @kf_tag("rate_switch", "rate_switch_1")
+         def rate_switch_1():
+             ...
+
+   **run_by_tag(tag)**
+   - 含义：运行所有标签中包含 tag 的已注册脚本，按注册顺序依次执行
+   - 传参：tag：str，标签名。传完整标签（如 'rate_switch_1'）只运行这一个脚本；传公共前缀标签（如 'rate_switch'）会运行所有带该标签的脚本
+   - 返回：List[str]，实际运行的函数名列表；没有匹配时打印提示并返回空列表
+   - 注意：只对"已 import 过的文件"生效，适合单文件内直接运行
+
+   **run_folder_by_tag(folder, tag)**
+   - 含义：跨文件按标签运行：自动导入 folder 目录下的全部 .py 文件（各文件里的 @kf_tag 随导入自动注册），再按 tag 筛选运行
+   - 传参：folder：str，脚本所在目录；tag：str，规则同 run_by_tag
+   - 返回：List[str]，实际运行的函数名列表
+   - 说明：目录下以 __ 开头的文件（如 __init__.py）会被跳过；各脚本文件自己的运行代码必须写在 if __name__ == '__main__': 里，防止被导入时误执行
+
+   跨文件推荐用法：每个脚本文件里用 @kf_tag 打好标签，然后用统一入口 CIU/run_scripts.py 运行：
+
+       python run_scripts.py
+
+   修改 run_scripts.py 里的 tag 字符串即可切换"只跑单个脚本 / 跑一类脚本"。
+
 2. 

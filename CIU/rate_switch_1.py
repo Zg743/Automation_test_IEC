@@ -4,6 +4,7 @@ from kf_IEC import *
 
 
 
+@kf_tag("rate_switch", "rate_switch_1")
 def rate_switch_1():
 
     step1 = "step1: 读取当前费率费率表, 按费率套1运行"
@@ -95,6 +96,7 @@ def rate_switch_1():
         ti_dict = {}
         conn.iec_connect()
         for a in range(1, 9):
+
             ti = conn._read_obis(f"15.8.{a}")
             if split_value(ti)['number'] == 0:
                 kf_info(f"不对劲, 脚本有问题, T{a}的电能值为0")
@@ -116,4 +118,7 @@ def rate_switch_1():
 
 
 if __name__ == '__main__':
-    rate_switch_1()
+    # 在这里改要运行的标签:
+    #   "rate_switch_1" -> 只运行本脚本
+    #   "rate_switch"   -> 运行所有带 rate_switch 标签的脚本
+    run_by_tag("rate_switch_1")

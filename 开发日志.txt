@@ -118,6 +118,25 @@
 - test.py / test1.py / CIU/rate_switch_1.py 的导入同步更新为 from kf import *
 - 原四个 kf_*.py 文件已删除
 
+十九、新增测试脚本标签工具 kf_IEC/kf_iec_tag.py
+- @kf_tag(*tags) 装饰器：给测试函数打标签并注册到模块级全局注册表（防重复注册）
+- run_by_tag(tag)：运行所有标签中包含 tag 的已注册脚本，返回实际运行的函数名列表
+  - 传完整标签如 "rate_switch_1" -> 只运行该脚本
+  - 传公共前缀标签如 "rate_switch" -> 运行所有带该标签的脚本
+  - 无匹配时打印提示并返回空列表
+- kf_IEC/__init__.py 已导出 kf_tag / run_by_tag
+- CIU/rate_switch_1.py 已加装饰器 @kf_tag("rate_switch", "rate_switch_1")，
+  入口改为 run_by_tag("rate_switch_1")（改字符串即可切换运行单个/一类脚本）
+- 已验证：单标签精确筛选、前缀批量筛选、无匹配提示均正常
+
+二十、标签工具扩展为跨文件运行
+- kf_iec_tag.py 新增 run_folder_by_tag(folder, tag)：
+  自动导入 folder 目录下全部 .py 文件（__ 开头除外），装饰器随导入自动注册，再按 tag 筛选运行
+  - 内部自动把项目根目录和脚本目录加入 sys.path，保证脚本里 from kf_IEC import * 可用
+- 新建统一入口 CIU/run_scripts.py：修改其中 tag 字符串即可切换"只跑单个脚本/跑一类脚本"，
+  运行方式 python run_scripts.py（脚本自己的运行代码必须放在 if __name__ == '__main__': 内）
+- 已用临时目录双脚本验证：单标签精确、前缀批量、无匹配提示均正常
+
 ========================================
 待办 / 已知问题
 ========================================

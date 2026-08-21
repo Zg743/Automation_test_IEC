@@ -11,4 +11,5 @@ KF 电表通信工具包
 from .kf_iec_info import *
 from .kf_iec_datetime import *
 from .kf_iec_energy import *
+from .kf_iec_tag import *
 from .kf_iec import *
