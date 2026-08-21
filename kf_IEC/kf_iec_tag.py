@@ -47,19 +47,44 @@ def run_by_tag(tag):
     运行所有标签中包含 tag 的已注册脚本（按注册顺序依次执行）。
     - 传入完整标签(如 'rate_switch_1'): 只运行这一个脚本
     - 传入公共前缀标签(如 'rate_switch'): 运行所有带该标签的脚本
+    - 单个脚本报错不会影响下一个脚本: 异常被捕获, 打印 Fail 后继续
     返回实际运行的函数名列表；没有匹配时打印提示并返回空列表。
     """
     ran_names = []
     for func, tags in _TAG_REGISTRY:
         if tag in tags:
-            kf_info(f"---------- 开始运行: {func.__name__} ----------")
-            func()
+            # 醒目的开始横幅
+            kf_info("=" * 64)
+            kf_info(f"=============== 开始运行: {func.__name__} ===============")
+            kf_info("=" * 64)
+            try:
+                func()
+                # 醒目的通过标记
+                kf_info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                kf_info(f">>>>>>>>>>>>> {func.__name__}脚本测试Pass <<<<<<<<<<<<<<<")
+                kf_info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            except Exception as e:
+                # 一个脚本失败不影响下一个脚本: 标记 Fail, 继续执行后面的脚本
+                kf_info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                kf_info(f"!!!!!!!!!!!!! {func.__name__}脚本测试Fail !!!!!!!!!!!!!")
+                kf_info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                kf_info(f"失败原因: {e}")
             ran_names.append(func.__name__)
 
     if len(ran_names) == 0:
         kf_info(f"没有找到带标签 [{tag}] 的脚本")
 
     return ran_names
+
+
+def kf_test_fail(script_name):
+    """
+    判定脚本测试失败: 抛出异常让当前脚本立即报错退出。
+    - 批量运行时: 异常被 run_by_tag 捕获, 统一打印 'xxx脚本测试Fail' 后继续下一个脚本
+    - 单独运行时: 进程直接带错误退出
+    用法: 脚本内维护 status/step_status, 当 status 为 False 时调用 kf_test_fail("脚本名")
+    """
+    raise RuntimeError(f"{script_name}脚本测试Fail")
 
 
 def run_folder_by_tag(folder, tag):

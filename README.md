@@ -1,6 +1,7 @@
 # Automation_test_IEC
 自动化测试框架及脚本_IEC版本
-您可以...(还没想好写什么)
+您可以...
+(还没想好写什么)
 
 
 使用指南:
@@ -168,7 +169,17 @@
    - 含义：运行所有标签中包含 tag 的已注册脚本，按注册顺序依次执行
    - 传参：tag：str，标签名。传完整标签（如 'rate_switch_1'）只运行这一个脚本；传公共前缀标签（如 'rate_switch'）会运行所有带该标签的脚本
    - 返回：List[str]，实际运行的函数名列表；没有匹配时打印提示并返回空列表
+   - 失败隔离：单个脚本报错（含测试 Fail）会被捕获，打印 'xxx脚本测试Fail' 和失败原因后继续下一个脚本
    - 注意：只对"已 import 过的文件"生效，适合单文件内直接运行
+
+   **kf_test_fail(script_name)**
+   - 含义：判定当前脚本测试失败，抛出异常让脚本立即报错退出；批量运行时由 run_by_tag 统一打印 Fail 并继续下一个脚本
+   - 传参：script_name：str，脚本名，用于拼接 Fail 信息 'xxx脚本测试Fail'
+   - 配套状态变量（在脚本函数内维护）：
+     - status：整个脚本的测试结果，默认 True
+     - step_status：步骤执行结果，每个 step 结束后判断，某一步不符合预期就置为 False
+     - 固定写法：步骤不符合预期时 step_status = False；然后 if not step_status: status = False；
+       最后 if not status: kf_test_fail("脚本名")
 
    **run_folder_by_tag(folder, tag)**
    - 含义：跨文件按标签运行：自动导入 folder 目录下的全部 .py 文件（各文件里的 @kf_tag 随导入自动注册），再按 tag 筛选运行

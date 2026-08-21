@@ -137,6 +137,27 @@
   运行方式 python run_scripts.py（脚本自己的运行代码必须放在 if __name__ == '__main__': 内）
 - 已用临时目录双脚本验证：单标签精确、前缀批量、无匹配提示均正常
 
+二十一、新增脚本测试状态机制（status / step_status / kf_test_fail）
+- kf_iec_tag.py 新增 kf_test_fail(script_name)：抛 RuntimeError('xxx脚本测试Fail') 让脚本立即报错退出
+- run_by_tag 增加失败隔离：单个脚本的任何异常都被捕获，打印 'xxx脚本测试Fail' + 失败原因后
+  继续执行下一个脚本，一个脚本失败不影响后续脚本
+- 脚本内固定模式：
+    status = True          # 整个脚本的测试结果, 默认 True
+    step_status = True     # 步骤执行结果, 每个step后判断
+    # 某步不符合预期时: step_status = False
+    if not step_status:
+        status = False
+    if not status:
+        kf_test_fail("脚本名")
+- rate_switch_1.py 已按此模式接线：
+    step1: 4 个 OBIS 有读空 -> step_status=False
+    step2: 同一费率最多尝试3次加负载都不累加 -> step_status=False（原无限重试改为有上限）
+           费率切换重试3次仍失败仍直接 raise
+    step3: 任一 T1~T8 电能值为 0 -> step_status=False
+- rate_switch_2.py 作为最简示例同步更新
+- 已验证：通过/Fail/意外异常三种脚本混跑，Fail 不阻断后续脚本
+- 开始运行/Pass/Fail 打印改为醒目横幅样式（= 开头横幅、> 通过、! 失败），并新增 Pass 标记输出
+
 ========================================
 待办 / 已知问题
 ========================================
