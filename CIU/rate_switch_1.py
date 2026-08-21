@@ -111,7 +111,7 @@ def rate_switch_1():
     ti_text = "{\n" + ", \n".join(lines) + "\n}"
     kf_info(ti_text)
 
-
+    print("test1")
 
 
 
