@@ -1,0 +1,113 @@
+========================================
+开发日志 - Automation-IEC（IEC 62056-21 Mode E 抄表工具）
+日期：2026-08-19
+========================================
+
+一、pyiec.py 重命名为 kf_iec.py
+- 将 pyiec.py 重命名为 kf_iec.py
+- test.py 中的导入同步改为 from kf_iec import *
+- .idea/workspace.xml 中的 IDE 配置未修改
+
+二、kf_iec.py：读取命令 R1/R6 按 OBIS 格式区分
+- 点分格式（如 0.9.1、C.9.66）使用 R1 命令
+- 4 位数据标识（如 1101、2616）使用 R6 命令
+- 依据：R 后数字表示该 OBIS 返回的数据项数量（R1 单值，R6 多值）
+
+三、kf_iec.py：_parse_data_block 支持多值解析
+- 原正则只提取第一个括号值，R6 多值返回时丢失数据
+- 改为用 re.findall 提取全部 (值) 数据项，多值用 ';' 分隔
+- 单值返回行为不变
+
+四、kf_iec.py：新增 iec_connect()
+- 将 auto_read 中连表步骤（识别 -> 切换波特率/选择协议 -> 密码校验）独立出来
+- 返回 (制造商, 波特率标识, 设备ID)
+- auto_read 改为调用 iec_connect()
+- 用法：conn.iec_connect() 连表，conn.break_session() 断开
+
+五、kf_iec.py：新增 set_obis / set_obis_dict
+- set_obis(obis_code, value)：写入单个 OBIS 参数，返回是否收到 ACK
+- 点分格式用 W1，4 位数据标识用 W6（与 R1/R6 对应）
+- set_obis_dict({obis: 写入数据})：批量写入，返回 {obis: 是否成功}
+
+六、kf_iec.py：新增 _ascll_str()
+- 将报文转换成可读的 ASCII 格式
+- 控制字符显示为 <SOH>/<STX>/<ETX>/<ACK>/<CR>/<LF> 等（模块级 _CTRL_NAMES）
+- ETX 后的校验字节显示为 <BCC>
+- 未知字节显示为 <0xXX>
+
+七、kf_iec.py：发送/接收打印格式
+- 所有发送/接收打印改为 _ascll_str 可读格式
+- 每次接收后加一个空行
+- 目标输出示例：
+    发送：/?!<CR><LF>
+    接收：/GML5\2DTSY5558ver3.4<CR><LF>
+    发送：<SOH>R1<STX>0.9.1()<ETX><BCC>
+    接收：<STX>0.9.1(17:00:44)<ETX><BCC>
+- B0 无响应时打印空的"接收："
+
+八、kf_iec_datetime.py（新建）
+- next_boundary_time(time_str, period, offset)：传入 HH:MM:SS 时间、周期（如 30min）、偏移秒（int），
+  返回向上取整到下一周期边界再偏移后的 HHMMSS。示例：('17:12:17', '30min', -3) -> '172957'
+- midnight_time(offset)：返回 0 点偏移后的 HHMMSS。示例：(-3) -> '235957'
+- last_day_of_month(date_str)：传入 YY-MM-DD，返回当月最后一天 YYMMDD。示例：('26-09-01') -> '260930'
+- 偏移秒参数类型为 int（如 -3），不是字符串 "-3s"
+- 已按"易读写法"展开，避免 map/生成器/三目等简洁写法
+- 周期支持 30min/1h/s，闰年用 calendar.monthrange 处理
+
+九、kf_iec_datetime.py：新增 format_date / format_time
+- format_date('260930') -> '26-09-30'（YYMMDD 转 YY-MM-DD）
+- format_time('172957') -> '17:29:57'（HHMMSS 转 HH:MM:SS）
+
+十、kf_iec_energy.py（新建，原名为 kf_iec_entry.py，后重命名）
+- split_value(value_str)：将 IEC 62056 数据值拆分为数字和单位，返回字典
+- 示例：split_value('000073.90*kWh') -> {'number': 73.9, 'unit': 'kWh'}
+- number 为 float 类型（会去掉整数部分前导零，小数末尾的 0 也会去掉）
+- 无单位时 unit 返回空字符串
+
+十一、kf_iec_info.py（新建，参考 kf_info.py）
+- info(*args)：仅控制台打印
+- log_info(*args)：仅写入日志（按小时分割到 Log/YYYYMMDD_HH.log）
+- kf_info(*args)：控制台 + 日志同时打印
+- 日志文件位于 Log/ 目录，按小时切换
+
+十二、kf_iec.py：连表/断开过程只打印到日志
+- 新增 self._connect_phase 标记 + _show() 辅助函数
+- 连接/断开阶段（iec_connect、break_session）的所有报文和状态信息只写日志，不打印控制台
+- 读取/写入操作及结果仍打印在控制台
+- iec_connect 状态信息（设备识别/协议选择/切换波特率/密码校验）改用 log_info
+
+十三、kf_iec.py：read_obis / _read_obis 拆分
+- read_obis（外部用）：iec_connect() -> _read_obis() -> break_session()（完整生命周期）
+- _read_obis（内部用）：在已建立的会话中读取，不负责连接/断开
+- read_obis_list 改为循环内调 _read_obis，整个列表只连接/断开一次
+- 同理 set_obis / _set_obis 拆分，set_obis_dict 只连接/断开一次
+
+十四、kf_iec.py：密码校验自动重试
+- iec_connect 中密码校验失败时自动重试 3 次（间隔 1s）
+- 用于应对电表忙时（如零点冻结）偶发不响应
+
+十五、test.py：循环校时脚本完善
+- 增量电能计算：split_value 返回的 number 转 float 后再相减（原来是字符串相减会报错）
+- 记录结果字典：results[f"{month}月"] = {"累计": ..., "增量": ...}
+- 连接方式：改用 conn.iec_connect() 保持会话，循环结束 break_session()
+- set_obis_dict 判断改为 all(result.values())（原来是判断键中是否含"失败"字符串，永远不成立）
+- 跨月后等待 time_pianyi+5s（原来 +1s，给电表完成冻结留时间）
+- 所有 print 改为 kf_info()（控制台 + 日志）
+- 新增 from kf_iec_info import kf_info
+
+十六、kf_iec.py：break_session 修复"强制关闭串口"误报
+- 原因：原判断 if self.ser and self.ser.is_open 在每次正常断开时都成立（串口本来就是打开的，由 break_session 负责关闭）
+- 修改：只有 B0 发送失败（异常路径）才打印"连接未断开, 强制关闭串口"
+- 正常断开只打印"电表连接断开"，端口照常关闭
+
+十七、kf_iec.py：重连可靠性修复
+- _open() 打开串口后调用 reset_input_buffer() / reset_output_buffer()，清除上次会话残留字节
+- 原因：B0 断开后立即重连时，串口缓冲残留字节会污染识别/协议交互，导致密码校验失败
+- break_session() 发完 B0 后等待从 0.1s 增至 0.5s，让电表完全退出编程模式
+
+========================================
+待办 / 已知问题
+========================================
+- 跨月后立即重连偶发"密码校验失败"，已通过清空缓冲 + B0 后等待缓解，如仍偶发可考虑
+  将 test.py 改为每次循环只连一次表（读取+校时写入合并到同一会话）
+- set_obis 假定成功响应为 ACK(0x06)，如实际返回数据帧需调整
