@@ -30,9 +30,9 @@
    - 传参：password：str，密码，默认 '00000000'
    - 返回：(制造商, 波特率标识, 设备ID) 三元组，如 ('GML', '5', '2DTSY5558ver3.4')
    - 异常：3 次密码校验均失败时抛出 RuntimeError("密码校验失败")
-   - 注意：连接成功后必须调用 break_session() 断开，两者成对使用
+   - 注意：连接成功后必须调用 iec_disconnect() 断开，两者成对使用
 
-   **break_session()**
+   **iec_disconnect()**
    - 含义：发送 B0 结束通信并关闭串口；B0 后等待 0.5s 让电表完全退出编程模式
    - 传参：无
    - 返回：无
@@ -59,7 +59,7 @@
 
    **_read_obis(obis_code)**
    - 含义：在已建立的会话中读取单个 OBIS 值（内部方法，不负责连接/断开）
-   - 前提：必须已调用 iec_connect() 且尚未 break_session()
+   - 前提：必须已调用 iec_connect() 且尚未 iec_disconnect()
    - 传参/返回：与 read_obis 相同
    - 用途：需要自己控制连接时机时使用，例如一次会话内先读后写，减少重连次数
 
@@ -92,7 +92,7 @@
            t = conn._read_obis("0.9.1")
            ok = conn._set_obis("0.9.1", "120000")
        finally:
-           conn.break_session()
+           conn.iec_disconnect()
 
    ---
 
@@ -135,6 +135,12 @@
    - 传参：value_str：str，IEC 62056 数据值字符串
    - 返回：Dict，{'number': float, 'unit': str}；无单位时 unit 为 ''；整数部分前导零和小数末尾零会被去掉
    - 示例：`split_value('000073.90*kWh')` -> `{'number': 73.9, 'unit': 'kWh'}`
+
+   **split_digits(value_str)**
+   - 含义：把数据值拆成"去掉小数点的数字串"和"单位"，数字保持原始字符串格式（不去前导零、不转 float）
+   - 传参：value_str：str，数据值字符串，带不带 '*单位' 都可以
+   - 返回：Tuple (digits, unit)；无单位时 unit 为 ''
+   - 示例：`split_digits('000073.90*kWh')` -> `('00007390', 'kWh')`；`split_digits('000073.90')` -> `('00007390', '')`
 
    ---
 

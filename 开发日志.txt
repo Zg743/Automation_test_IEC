@@ -158,6 +158,17 @@
 - 已验证：通过/Fail/意外异常三种脚本混跑，Fail 不阻断后续脚本
 - 开始运行/Pass/Fail 打印改为醒目横幅样式（= 开头横幅、> 通过、! 失败），并新增 Pass 标记输出
 
+二十二、方法重命名: break_session -> iec_disconnect
+- kf_IEC/kf_iec.py 中断开会话的方法由 break_session 改名为 iec_disconnect，与 iec_connect 对应
+- 类内部 5 处调用及 test.py / test1.py / CIU/rate_switch_1~3.py / README.md 同步更新
+- 顺带修复 rate_switch_3.py 笔误: step_status.keys() -> step_parameters.keys()
+
+二十三、kf_iec_energy.py 新增 split_digits
+- 传入数据值字符串，返回 (去掉小数点的数字串, 单位) 元组；数字保持字符串格式，不去前导零、不转 float
+- 示例: split_digits('000073.90*kWh') -> ('00007390', 'kWh')
+        split_digits('000073.90')     -> ('00007390', '')
+- 已实测两种入参均正确
+
 ========================================
 待办 / 已知问题
 ========================================

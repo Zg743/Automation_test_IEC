@@ -240,7 +240,7 @@ class IEC62056ModeE:
         try:
             return self._read_obis(obis_code)
         finally:
-            self.break_session()
+            self.iec_disconnect()
 
     def _read_obis(self, obis_code: str) -> str:
         """
@@ -274,7 +274,7 @@ class IEC62056ModeE:
                 print(f"读取结果: {obis} = {value}")
             return results
         finally:
-            self.break_session()
+            self.iec_disconnect()
 
     def set_obis(self, obis_code: str, value: str) -> bool:
         """
@@ -285,7 +285,7 @@ class IEC62056ModeE:
         try:
             return self._set_obis(obis_code, value)
         finally:
-            self.break_session()
+            self.iec_disconnect()
 
     def _set_obis(self, obis_code: str, value: str) -> bool:
         """
@@ -322,9 +322,9 @@ class IEC62056ModeE:
                 kf_info(message)
             return results
         finally:
-            self.break_session()
+            self.iec_disconnect()
 
-    def break_session(self):
+    def iec_disconnect(self):
         """步骤5：发送 B0 结束通信并关闭串口"""
         self._connect_phase = True
         b0_sent = False
@@ -397,7 +397,7 @@ class IEC62056ModeE:
             values = self.read_obis_list(obis_list)
             return values
         finally:
-            self.break_session()
+            self.iec_disconnect()
             log_info("会话结束")
 
 
