@@ -90,7 +90,7 @@ def clock_iec_1():
     kf_info("\n=== 校时结束 ===")
     kf_info("最近9个月的累计及增量电能:")
     kf_info(results)
-    # conn.break_session()
+    # conn.iec_disconnect()
 
 
 

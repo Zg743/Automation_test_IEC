@@ -42,7 +42,7 @@ def clock_iec_1():
             else:
                 kf_info("设置失败")
         finally:
-            conn.break_session()
+            conn.iec_disconnect()
 
         kf_info(f"等待{time_pianyi}+2s")
         time.sleep(time_pianyi + 2)
@@ -70,7 +70,7 @@ def clock_iec_1():
             }
             kf_info(f"第{i}次循环结束: {month_key} 累计={current_number} 增量={increment}")
         finally:
-            conn.break_session()
+            conn.iec_disconnect()
 
     kf_info("\n=== 校时结束 ===")
     kf_info("最近9个月的累计及增量电能:")

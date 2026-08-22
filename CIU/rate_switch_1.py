@@ -1,4 +1,4 @@
-from random import randint
+﻿from random import randint
 
 from kf_IEC import *
 
@@ -140,7 +140,7 @@ def rate_switch_1():
             else:
                 ti_dict[a] = ti
     finally:
-        conn.break_session()
+        conn.iec_disconnect()
 
     # 每个 step 后判断: 步骤失败 -> 脚本失败 -> 报错退出
     if not step_status:
