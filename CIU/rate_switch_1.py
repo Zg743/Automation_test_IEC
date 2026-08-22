@@ -6,6 +6,9 @@ from kf_IEC import *
 
 @kf_tag("rate_switch", "rate_switch_1")
 def rate_switch_1():
+    """
+    构造T1~T8之间所有对应费率的电能数据
+    """
 
     step1 = "step1: 读取当前费率费率表, 按费率套1运行"
     step2 = "step2: 在T1~T8之间持续负载运行, 运行时间在(600s~1200s)随机"

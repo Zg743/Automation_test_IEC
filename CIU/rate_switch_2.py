@@ -4,6 +4,9 @@ from kf_IEC import *
 
 @kf_tag("rate_switch", "rate_switch_2")
 def rate_switch_2():
+    """
+    连续构造12个月的电能数据及增量电能
+    """
 
     step1 = "step1:读取当前时间"
     step2 = "step2:循环校时, 构造12月电能数据"
