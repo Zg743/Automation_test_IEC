@@ -86,8 +86,9 @@ def rate_switch_1():
             time.sleep(1)
 
         if not result_rate:
-            # 重试次数用尽仍未成功, 抛异常强制退出脚本
-            raise RuntimeError(f"T{i}费率切换失败, 已重试{max_retry}次, 脚本终止")
+            # 重试次数用尽仍未成功, 判定本脚本测试失败并退出
+            kf_info(f"T{i}费率切换失败, 已重试{max_retry}次")
+            kf_test_fail("rate_switch_1")
 
         # 切换费率后的对应费率的电能
         active_total_energy1 = split_value(conn.read_obis(f"15.8.{i}"))['number']
@@ -97,12 +98,12 @@ def rate_switch_1():
         rate_ok = False
         t_attempt = 0
         while t_attempt < 3 and not rate_ok:
-            ti_wait = randint(60,72)
+            ti_wait = randint(1200,1500)
             kf_info(f"T{i}第{t_attempt+1}次加负载, 等待{ti_wait}s")
             time.sleep(ti_wait)
 
             active_total_energy2 = split_value(conn.read_obis(f"15.8.{i}"))['number']
-            kf_info(f"加负载后T{i}的电能值:{active_total_energy2}")
+            kf_info(f"加负载后T{i}的电能值:{active_total_energy2}kwh")
 
             if active_total_energy1 < active_total_energy2:
                 kf_info(f"T{i}费率正常累加")
