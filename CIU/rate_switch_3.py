@@ -97,7 +97,7 @@ def rate_switch_3():
     TOU_list = []
     TI_list = []
 
-    for k in step_status.keys():
+    for k in step_parameters.keys():
         step_list.append(k)
 
     for k in TOU_paramaters.keys():
