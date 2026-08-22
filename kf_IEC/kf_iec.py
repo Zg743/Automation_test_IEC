@@ -349,34 +349,48 @@ class IEC62056ModeE:
             self.ser.close()
 
     # ---------- 连表 ----------
-    def iec_connect(self, password: str = '00000000') -> Tuple[str, str, str]:
+    def iec_connect(self, password: str = '00000000', max_rounds: int = 3) -> Tuple[str, str, str]:
         """
         连接电表：识别 -> 切换波特率/选择协议 -> 密码校验
+        - 单轮内密码失败重试 3 次（间隔 1s，应对电表忙时短暂不响应）
+        - 整轮失败后从头重新握手，最多 max_rounds 轮（应对 ACK 051 协议选择丢失，
+          此时电表未进入编程模式，原地重发 P1 无用，必须回到 /?! 重新同步）
         返回 (制造商, 波特率标识, 设备ID)
         """
         log_info("==================开始连接电表==================")
         self._connect_phase = True
         try:
-            # 步骤1 发送 /?! 并解析标识应答
-            man, baud_id, dev_id = self.identify()
-            log_info(f"设备识别: 制造商={man}, 波特率标识={baud_id}, ID={dev_id}")
-
-            # 步骤2 切换波特率并发送协议选择
-            # 这里需要确定是先发协议选择还是先切换波特率再发协议选择
-            resp = self.switch_baud_and_select_protocol(baud_id)
-            if resp:
-                log_info(f"协议选择响应：{resp.hex()}")
-            else:
-                log_info("协议选择响应：无")
-
-            # 步骤3 密码校验（必须尽快发送，避免电表会话超时）
-            # 电表可能在忙（如零点冻结）时不响应，自动重试几次
+            round_now = 1
             password_ok = False
-            for attempt in range(3):
-                if self.send_password(password):
-                    password_ok = True
-                    break
-                time.sleep(1)
+            while round_now <= max_rounds and not password_ok:
+                # 每一轮都从 /?! 开始完整握手（identify 内部会重开串口并清空缓冲）
+                man, baud_id, dev_id = self.identify()
+                log_info(f"设备识别: 制造商={man}, 波特率标识={baud_id}, ID={dev_id}")
+
+                # 步骤2 切换波特率并发送协议选择
+                # 这里需要确定是先发协议选择还是先切换波特率再发协议选择
+                resp = self.switch_baud_and_select_protocol(baud_id)
+                if resp:
+                    log_info(f"协议选择响应：{resp.hex()}")
+                else:
+                    log_info("协议选择响应：无")
+
+                # 步骤3 密码校验（同一轮内重试3次，必须尽快发送，避免电表会话超时）
+                pwd_try = 1
+                while pwd_try <= 3 and not password_ok:
+                    if self.send_password(password):
+                        password_ok = True
+                    elif pwd_try < 3:
+                        time.sleep(1)
+                    pwd_try = pwd_try + 1
+
+                # 这一轮没连上：协商可能已断，回到 /?! 重新握手
+                if not password_ok:
+                    log_info(f"第{round_now}/{max_rounds}轮连接失败, 从头重新握手")
+                    round_now = round_now + 1
+                    if round_now <= max_rounds:
+                        time.sleep(0.5)
+
             if not password_ok:
                 time.sleep(0.5)
                 raise RuntimeError("密码校验失败")
