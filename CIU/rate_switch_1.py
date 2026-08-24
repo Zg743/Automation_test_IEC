@@ -8,6 +8,7 @@ from kf_IEC import *
 def rate_switch_1():
     """
     构造T1~T8之间所有对应费率的电能数据
+    测试前请保证余额充足或者为后付费模式
     """
 
     step1 = "step1: 读取当前费率费率表, 按费率套1运行"

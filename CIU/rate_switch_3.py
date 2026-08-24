@@ -5,6 +5,7 @@
 
 from kf_IEC import *
 
+@kf_tag("rate_switch", "rate_switch_3")
 def rate_switch_3():
     """
     一键配置费率表
@@ -108,23 +109,39 @@ def rate_switch_3():
 
     conn.iec_connect()
     try:
+        kf_info("打印当前阶梯费率表")
         for k in step_list:
-            result = split_digits(conn._read_obis(k))
+            step_pa = conn._read_obis(k)
+            result = split_digits(step_pa)
             if result[0]!= step_parameters[k]:
                 step_status = False
+                kf_info(f"{k}={result[0]}, 与配置值{step_parameters[k]}不匹配")
+            else:
+                kf_info(f"{k}={split_value(step_pa)["number"]}{split_value(step_pa)["unit"]}\n")
 
+
+        kf_info("打印当前多费率表")
         for k in TOU_list:
-            result = split_digits(conn._read_obis(k))
+            TOU_pa = conn._read_obis(k)
+            result = split_digits(TOU_pa)
             if result[0]!= TOU_paramaters[k]:
                 step_status = False
+                kf_info(f"{k}={result[0]}, 与配置值{TOU_paramaters[k]}不匹配")
+            else:
+                kf_info(f"{k}={split_value(TOU_pa)["number"]}\n")
 
+        kf_info("打印当前单费率表")
         for k in TI_list:
-            result = split_digits(conn._read_obis(k))
+            TI_pa = conn._read_obis(k)
+            result = split_digits(TI_pa)
             if result[0]!= TI_paramaters[k]:
                 step_status = False
+                kf_info(f"{k}={result[0]}, 与配置值{TI_paramaters[k]}不匹配\n")
+            else:
+                kf_info(f"{k}={split_value(TI_pa)["number"]}\n")
+
 
         if not step_status:
-
             status = False
         if not status:
             kf_info(f"{step3}**Fail")
