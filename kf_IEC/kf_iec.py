@@ -271,7 +271,7 @@ class IEC62056ModeE:
             for obis in obis_list:
                 value = self._read_obis(obis)
                 results[obis] = value
-                print(f"读取结果: {obis} = {value}")
+                kf_info(f"读取结果: {obis} = {value}")
             return results
         finally:
             self.iec_disconnect()

@@ -188,6 +188,18 @@
   整轮失败后回到 /?! 重新握手最多 3 轮(identify 会重开串口清空缓冲)
 - 全部轮次失败才抛 RuntimeError("密码校验失败")，Fail 横幅照常上报
 
+日期：2026-08-26
+========================================
+
+二十五、修复 rate_switch_2 空值判断笔误 + run_by_tag 输出完整 traceback
+- 现象(20260826_13.log): step1 读取时间全部成功后立刻 Fail，失败原因
+  "argument of type 'NoneType' is not a container or iterable"
+- 错因: rate_switch_2.py 空值检查写成 `if value in None`(None 不是容器，
+  第一圈无条件抛 TypeError)；判空应为 `if not value`
+- 改进: run_by_tag 捕获异常后，在"失败原因"之外再打印完整 traceback
+  (含出错文件和行号)。此前只打 str(e) 且脚本正常退出(退出码0)，
+  PyCharm 控制台看不到任何定位信息
+
 ========================================
 待办 / 已知问题
 ========================================

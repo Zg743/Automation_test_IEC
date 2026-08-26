@@ -8,6 +8,7 @@
 import os
 import sys
 import importlib
+import traceback
 
 from .kf_iec_info import kf_info
 
@@ -69,6 +70,8 @@ def run_by_tag(tag):
                 kf_info(f"!!!!!!!!!!!!! {func.__name__}脚本测试Fail !!!!!!!!!!!!!")
                 kf_info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 kf_info(f"失败原因: {e}")
+                # 打印完整调用栈(含出错文件和行号), 否则 PyCharm 控制台看不到任何定位信息
+                kf_info("错误位置:\n" + traceback.format_exc())
             ran_names.append(func.__name__)
 
     if len(ran_names) == 0:
