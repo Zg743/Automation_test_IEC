@@ -23,14 +23,14 @@ def rate_switch_2():
     kf_info("当前时间为:", date_now["0.9.2"], date_now["0.9.1"])
 
     for key, value in date_now.items():
-        if value in None:
+        if not value:
             kf_info(f"读取当前时间失败, {key}的值为空")
             step_status = False
 
     if not step_status:
         status = False
     if not status:
-        kf_test_fail("rate_switch_1")
+        kf_test_fail("rate_switch_2")
 
     # 步骤2: step2:循环校时, 构造12月电能数据
     kf_info(step2)
@@ -50,7 +50,7 @@ def rate_switch_2():
 
             # 根据当前时间计算校时时间:
             # 校时至当前月的跨月点前300~420s randint(300,420)
-            time_pianyi = randint(300, 420)
+            time_pianyi = randint(600, 720)
             set_time = midnight_time(-time_pianyi)
 
             # 同一会话内完成校时写入
@@ -60,6 +60,8 @@ def rate_switch_2():
             }
             date_ok = conn._set_obis("0.9.2", write_dict["0.9.2"])
             time_ok = conn._set_obis("0.9.1", write_dict["0.9.1"])
+            kf_info(f'校时至{format_date(date_ok)} {format_time(time_ok)}')
+
             if date_ok and time_ok:
                 kf_info("校时成功")
             else:
