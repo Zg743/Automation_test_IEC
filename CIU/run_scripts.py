@@ -16,7 +16,7 @@ if __name__ == '__main__':
     # 在这里改要运行的标签:
     #   "rate_switch_1" -> 只运行 rate_switch_1.py
     #   "rate_switch"   -> 运行所有带 rate_switch 标签的脚本(如 rate_switch_1.py、rate_switch_2.py ...)
-    tag = "rate_switch_2"
+    tag = "rate_switch_4"
 
     # 脚本目录 = 本文件所在目录, 该目录下所有 .py 都会被自动导入参与筛选
     script_dir = os.path.dirname(os.path.abspath(__file__))

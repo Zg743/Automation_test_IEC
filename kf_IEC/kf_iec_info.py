@@ -15,6 +15,7 @@ def info(*args, **kwargs):
 
 
 # 日志存放目录（固定在项目根目录下的 Log，不受运行脚本时的工作目录影响）
+# 日志按天分目录存放: 26年8月26日的日志放在 Log/260826/ 下
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(PROJECT_ROOT, "Log")
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -45,13 +46,18 @@ def _get_logger():
             _current_logger.removeHandler(handler)
             handler.close()
 
+    # 按天创建子目录: 例如 26年8月26日 -> Log/260826/
+    # 小时串里含日期，跨天时小时串必然变化，会自动走到这里重建新目录下的 handler
+    day_dir = os.path.join(LOG_DIR, time.strftime("%y%m%d", time.localtime()))
+    os.makedirs(day_dir, exist_ok=True)
+
     # 创建新的 logger（名称唯一，避免干扰）
     _current_logger = logging.getLogger(f"log_info_{current_hour}")
     _current_logger.setLevel(logging.INFO)
     _current_logger.propagate = False  # 防止传播到根 logger
 
     # 创建文件 handler
-    log_path = os.path.join(LOG_DIR, f"{current_hour}.log")
+    log_path = os.path.join(day_dir, f"{current_hour}.log")
     file_handler = logging.FileHandler(log_path, encoding='utf-8')
 
     # 设置日志格式
