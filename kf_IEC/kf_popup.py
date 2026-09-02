@@ -14,6 +14,18 @@ from tkinter import messagebox
 _alert_token = [0]
 
 
+def _center_on_screen(win):
+    """将窗口 win 居中显示在屏幕上"""
+    win.update_idletasks()
+    win_width = win.winfo_reqwidth()
+    win_height = win.winfo_reqheight()
+    screen_width = win.winfo_screenwidth()
+    screen_height = win.winfo_screenheight()
+    x = (screen_width - win_width) // 2
+    y = (screen_height - win_height) // 3
+    win.geometry(f'+{x}+{y}')
+
+
 def kf_alert(title: str, message: str):
     """
     警告弹窗：在后台线程弹出非模态窗口，脚本不会暂停。
@@ -34,6 +46,8 @@ def kf_alert(title: str, message: str):
         tk.Button(win, text="确定", command=root.destroy, width=10,
                   padx=20, pady=5).pack(pady=(0, 10))
         win.protocol("WM_DELETE_WINDOW", root.destroy)
+
+        _center_on_screen(win)
 
         def _check_close():
             if _alert_token[0] != my_token:
@@ -105,6 +119,7 @@ def kf_inquire(title: str, message: str,
               padx=10, pady=5).pack(side='left', padx=5)
 
     win.protocol("WM_DELETE_WINDOW", _on_cancel)
+    _center_on_screen(win)
     root.mainloop()
 
     return bool(result[0])
