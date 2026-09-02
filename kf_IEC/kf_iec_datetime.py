@@ -92,27 +92,56 @@ def midnight_time(offset: int) -> str:
     return _hms(target_seconds)
 
 
-def last_day_of_month(date_str: str) -> str:
+def _apply_month_offset(date_str: str, offset_months: int):
     """
-    传入 YY-MM-DD 日期，返回当月最后一天的日期，格式 YYMMDD。
-    示例: last_day_of_month('26-09-01') -> '260930'
+    将 YY-MM-DD 的年月加上偏移月数，处理跨年进退位。
+    返回 (year_yy, month, day)，day 保持原值不变（供调用方决定取月初还是月末）。
+    示例: _apply_month_offset('26-11-03', 2) -> (27, 1, 3)
+          _apply_month_offset('26-01-03', -2) -> (25, 11, 3)
     """
-    # 拆分日期
     date_parts = date_str.split('-')
     year_yy = int(date_parts[0])
     month = int(date_parts[1])
+    day = int(date_parts[2])
 
-    # 补全为四位年份，获取当月最后一天
+    full_year = 2000 + year_yy
+    # 加上偏移月
+    total_month = (full_year * 12 + month - 1) + offset_months
+    new_year = total_month // 12
+    new_month = total_month % 12 + 1
+
+    return (new_year - 2000, new_month, day)
+
+
+def last_day_of_month(date_str: str, offset_months: int = 0) -> str:
+    """
+    传入 YY-MM-DD 日期，返回(当月或偏移后月份)最后一天的日期，格式 YYMMDD。
+    offset_months=0 默认当月，=1 向未来偏移一个月，=-1 向过去偏移一个月。
+    示例: last_day_of_month('26-09-01')        -> '260930'
+          last_day_of_month('26-09-01', 1)     -> '261031'
+          last_day_of_month('26-01-01', -1)    -> '251231'
+    """
+    year_yy, month, _ = _apply_month_offset(date_str, offset_months)
+
     full_year = 2000 + year_yy
     month_range = calendar.monthrange(full_year, month)
     last_day = month_range[1]
 
-    # 组装为 YYMMDD
-    year_str = f'{year_yy:02d}'
-    month_str = f'{month:02d}'
-    last_day_str = f'{last_day:02d}'
-    result = year_str + month_str + last_day_str
+    result = f'{year_yy:02d}{month:02d}{last_day:02d}'
+    return result
 
+
+def first_day_of_month(date_str: str, offset_months: int = 0) -> str:
+    """
+    传入 YY-MM-DD 日期，返回(当月或偏移后月份)第一天的日期，格式 YYMMDD。
+    offset_months=0 默认当月，=1 向未来偏移一个月，=-1 向过去偏移一个月。
+    示例: first_day_of_month('26-09-03')        -> '260901'
+          first_day_of_month('26-09-03', 1)     -> '261001'
+          first_day_of_month('26-01-03', -1)    -> '251201'
+    """
+    year_yy, month, _ = _apply_month_offset(date_str, offset_months)
+
+    result = f'{year_yy:02d}{month:02d}01'
     return result
 
 
@@ -148,5 +177,10 @@ if __name__ == '__main__':
     print(next_boundary_time('17:12:17', '30min', -3))   # 172957
     print(midnight_time(-3))                             # 235957
     print(last_day_of_month('26-09-01'))                 # 260930
+    print(last_day_of_month('26-09-01', 1))              # 261031
+    print(first_day_of_month('26-09-03'))                # 260901
+    print(first_day_of_month('26-09-03', 1))             # 261001
+    print(first_day_of_month('26-01-03', -1))            # 251201
+    print(first_day_of_month('26-09-03', -1))
     print(format_date('260930'))                         # 26-09-30
     print(format_time('172957'))                         # 17:29:57

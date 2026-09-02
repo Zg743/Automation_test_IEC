@@ -220,6 +220,14 @@
   旧警告窗口轮询(200ms)检测令牌变化后自行 destroy；kf_prompt/kf_inquire
   弹出前也会 +1，所以任何一种新弹窗都会自动踢掉上一个 kf_alert
 
+二十八、kf_iec_datetime 新增 first_day_of_month + 两函数偏移月参数
+- 新增 first_day_of_month(date_str, offset_months=0): 传入 YY-MM-DD，
+  返回当月(或偏移月)第一天 YYMMDD。例: first_day_of_month('26-09-03', 1) -> '261001'
+- last_day_of_month 增加 offset_months 参数(默认0)，=1 未来一月，=-1 过去一月
+  。例: last_day_of_month('26-09-01', 1) -> '261031'
+- 抽取私有 _apply_month_offset 统一处理年月偏移与跨年进退位(闰月由
+  calendar.monthrange 自动处理)；day 保留给调用方决定取月初/月末
+
 ========================================
 待办 / 已知问题
 ========================================
