@@ -207,8 +207,10 @@ class IEC62056ModeE:
         返回电表的首次响应（可能为数据帧或 ACK）
         """
 
-        # 发送 ACK + 协议控制字符串 "051\r\n"
-        self._send(b'\x06051\r\n')
+        # 发送 ACK + 协议控制字符串 "0<波特率标识>1\r\n"
+        # 协议控制串由电表返回的波特率标识决定，例如电表返回 4 -> 发送 "041"
+        protocol_str = f'0{baud_id}1\r\n'.encode()
+        self._send(b'\x06' + protocol_str)
         time.sleep(0.3)
         # 切换波特率为9600
         new_baud = self.BAUD_MAP.get(baud_id, 300)
