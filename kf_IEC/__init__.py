@@ -5,6 +5,7 @@ KF 电表通信工具包
 - kf_iec_energy    : 电能值拆分工具 (split_value)
 - kf_iec_info      : 打印与日志工具 (info, log_info, kf_info)
 - kf_popup         : 弹窗工具 (kf_alert, kf_prompt, kf_inquire)
+- kf_07_heartbeat  : 心跳模块 (Heartbeat, DEFAULT_HEARTBEAT_FRAME)
 
 使用方式: from kf_IEC import *
 """
@@ -15,3 +16,4 @@ from .kf_iec_energy import *
 from .kf_iec_tag import *
 from .kf_iec import *
 from .kf_popup import *
+from .kf_07_heartbeat import *

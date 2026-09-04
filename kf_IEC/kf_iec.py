@@ -1,6 +1,7 @@
 import time
 import serial
 import re
+import threading
 from typing import List, Dict, Tuple, Optional
 from .kf_iec_datetime import *
 from .kf_iec_energy import *
@@ -34,6 +35,8 @@ class IEC62056ModeE:
         self.initial_baud = initial_baud
         self.timeout = timeout
         self._connect_phase = False
+        # 共享串口互斥锁：与心跳(Heartbeat)共享，保证串口访问串行、帧不交错
+        self.io_lock = threading.Lock()
         #self.ser: Optional[serial.Serial] = None
         self.ser = serial.Serial(rtscts=False, dsrdtr=False, baudrate=self.initial_baud)
         self.ser.set_buffer_size(rx_size=10240, tx_size=5120)
@@ -91,15 +94,13 @@ class IEC62056ModeE:
                 info()
 
     def _send(self, data: bytes):
-        """发送原始字节"""
-        self.ser.rts = False
-        self.ser.drt = False
-        # self.ser.set_buffer_size(rx_size=10240, tx_size=5120)
-        # self.ser.setRTS(False)
-        # self.ser.setDRT(False)
-        self._show(f"发送：{self._ascll_str(data)}")
-        self.ser.write(data)
-        self.ser.flush()
+        """发送原始字节（持 io_lock，与心跳线程互斥串行）"""
+        with self.io_lock:
+            self.ser.rts = False
+            self.ser.drt = False
+            self._show(f"发送：{self._ascll_str(data)}")
+            self.ser.write(data)
+            self.ser.flush()
 
     def _read_line(self) -> bytes:
         """读取以 CR LF 结尾的一行（用于标识响应）"""
@@ -108,7 +109,11 @@ class IEC62056ModeE:
         return resp
 
     def _read_frame(self) -> Optional[bytes]:
-        """读取一个帧：单字节 ACK 或 SOH/STX 开头的完整帧"""
+        """读取一个帧：单字节 ACK 或 SOH/STX 开头的完整帧（持 io_lock 与心跳互斥）"""
+        with self.io_lock:
+            return self._read_frame_unlocked()
+
+    def _read_frame_unlocked(self) -> Optional[bytes]:
         byte = self.ser.read(1)
         if not byte:
             self._show("接收：", blank=True)
