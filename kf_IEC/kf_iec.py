@@ -46,7 +46,7 @@ class IEC62056ModeE:
         self.ser = serial.Serial(
             port=self.port,
             baudrate=baud,
-            bytesize=serial.SEVENBITS,
+            bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_EVEN,
             stopbits=serial.STOPBITS_ONE,
             timeout=self.timeout,
