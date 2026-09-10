@@ -35,6 +35,7 @@ class IEC62056ModeE:
         self.initial_baud = initial_baud
         self.timeout = timeout
         self._connect_phase = False
+        self._iec_active = False
         # 共享串口互斥锁：与心跳(Heartbeat)共享，保证串口访问串行、帧不交错
         self.io_lock = threading.Lock()
         #self.ser: Optional[serial.Serial] = None
@@ -49,7 +50,7 @@ class IEC62056ModeE:
         self.ser = serial.Serial(
             port=self.port,
             baudrate=baud,
-            bytesize=serial.SEVENBITS,
+            bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_EVEN,
             stopbits=serial.STOPBITS_ONE,
             timeout=self.timeout,
@@ -118,6 +119,15 @@ class IEC62056ModeE:
         if not byte:
             self._show("接收：", blank=True)
             return None
+        # 跳过 645 心跳应答帧（0x68 开头），继续读下一个字节
+        if byte[0] == 0x68:
+            while True:
+                ch = self.ser.read(1)
+                if not ch:
+                    break
+                if ch == b'\x16':
+                    break
+            return self._read_frame_unlocked()
         # 单字节 ACK
         if byte == b'\x06':
             self._show(f"接收：{self._ascll_str(byte)}", blank=True)
@@ -254,19 +264,24 @@ class IEC62056ModeE:
         内部使用：在已建立的会话中读取单个 OBIS 值，不负责连接/断开
         返回读取到的值（字符串），失败返回空字符串
         """
-        data = f'{obis_code}()'.encode()
-        # 点分格式(0.9.1等)用 R1；4位数据标识(1101、2616等)用 R6
-        if '.' in obis_code:
-            cmd = b'R1'
-        else:
-            cmd = b'R6'
-        frame = self._build_command_frame(cmd, data)
-        self._send(frame)
-        resp = self._read_frame()
-        if resp and resp[0] in (0x01, 0x02):
-            _, value = self._parse_data_block(resp)
-            return value
-        return ''
+        self._iec_active = True
+        try:
+            data = f'{obis_code}()'.encode()
+            # 点分格式(0.9.1等)用 R1；4位数据标识(1101、2616等)用 R6
+            if '.' in obis_code:
+                cmd = b'R1'
+            else:
+                cmd = b'R6'
+            frame = self._build_command_frame(cmd, data)
+            self.ser.reset_input_buffer()
+            self._send(frame)
+            resp = self._read_frame()
+            if resp and resp[0] in (0x01, 0x02):
+                _, value = self._parse_data_block(resp)
+                return value
+            return ''
+        finally:
+            self._iec_active = False
 
     def read_obis_list(self, obis_list: List[str]) -> Dict[str, str]:
         """
@@ -299,16 +314,21 @@ class IEC62056ModeE:
         内部使用：在已建立的会话中写入单个 OBIS 值，不负责连接/断开
         返回 True 表示收到 ACK 写入成功
         """
-        data = f'{obis_code}({value})'.encode()
-        # 点分格式(0.9.1等)用 W1；4位数据标识(1101、2616等)用 W6
-        if '.' in obis_code:
-            cmd = b'W1'
-        else:
-            cmd = b'W6'
-        frame = self._build_command_frame(cmd, data)
-        self._send(frame)
-        resp = self._read_frame()
-        return resp == b'\x06'
+        self._iec_active = True
+        try:
+            data = f'{obis_code}({value})'.encode()
+            # 点分格式(0.9.1等)用 W1；4位数据标识(1101、2616等)用 W6
+            if '.' in obis_code:
+                cmd = b'W1'
+            else:
+                cmd = b'W6'
+            frame = self._build_command_frame(cmd, data)
+            self.ser.reset_input_buffer()
+            self._send(frame)
+            resp = self._read_frame()
+            return resp == b'\x06'
+        finally:
+            self._iec_active = False
 
     def set_obis_dict(self, data_dict: Dict[str, str]) -> Dict[str, bool]:
         """

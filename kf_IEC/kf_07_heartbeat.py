@@ -12,7 +12,7 @@
     conn = IEC62056ModeE("com3")
     conn.iec_connect()
 
-    hb = Heartbeat(ser=conn.ser, lock=conn.io_lock, interval=5)
+    hb = Heartbeat(conn=conn, lock=conn.io_lock, interval=5)
     hb.start()          # 后台每 5 秒发送一次心跳帧
 
     # ... 执行其余读表/写操作（IEC 操作与心跳通过 io_lock 自动串行）...
@@ -37,10 +37,10 @@ class Heartbeat:
     所有串口写入都在传入的 lock 保护下进行，与 IEC 操作互斥串行。
     """
 
-    def __init__(self, ser, lock, interval: float = 5,
+    def __init__(self, conn, lock, interval: float = 5,
                  frame: bytes = DEFAULT_HEARTBEAT_FRAME,
                  name: str = "kf_heartbeat"):
-        self.ser = ser          # 与 IEC62056ModeE 共享的串口对象
+        self.conn = conn        # 持有 IEC62056ModeE 实例，动态取 conn.ser 避免引用失效
         self.lock = lock        # 与 IEC62056ModeE.io_lock 共享的互斥锁
         self.interval = interval
         self.frame = frame
@@ -50,6 +50,7 @@ class Heartbeat:
 
     def start(self):
         """启动后台心跳线程（守护线程，主进程退出自动结束）"""
+        kf_info("==============开启后台线程,发送心跳==============")
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
@@ -58,15 +59,29 @@ class Heartbeat:
         self._thread.start()
 
     def _run(self):
-        while not self._stop.wait(self.interval):
-            self._send()
+        while not self._stop.is_set():
+            remain = self.interval
+            while remain > 0 and not self._stop.is_set():
+                self._stop.wait(min(remain, 1))
+                remain -= 1
+            if not self._stop.is_set():
+                self._send()
 
     def _send(self):
         """持锁写入心跳帧，避免与 IEC 收发发生字节交错"""
+        if self._stop.is_set():
+            return
+        if self.conn._iec_active:
+            return
         try:
             with self.lock:
-                self.ser.write(self.frame)
-                self.ser.flush()
+                if self._stop.is_set():
+                    return
+                if self.conn._iec_active:
+                    return
+                self.conn.ser.write(self.frame)
+                self.conn.ser.flush()
+                self.conn.ser.reset_input_buffer()
         except Exception:
             # 串口已关闭或出错时静默吞掉，等待下次发送；stop() 会真正停止
             pass
@@ -75,11 +90,15 @@ class Heartbeat:
         """立即手动发送一次心跳帧（可用于唤醒后首次衔接）"""
         self._send()
 
-    def stop(self, timeout: float = 2):
+    def stop(self):
         """停止心跳线程并等待其退出"""
+        kf_info("==============关闭后台线程,停止心跳==============")
         self._stop.set()
-        if self._thread is not None and threading.current_thread() != self._thread:
-            self._thread.join(timeout)
+        t = self._thread
+        if t is not None and threading.current_thread() != t:
+            t.join(timeout=5)
+        if t is not None and t.is_alive():
+            return
         self._thread = None
 
 
@@ -91,7 +110,7 @@ if __name__ == "__main__":
     conn.iec_connect()             # 建立 IEC 会话
 
     # 启动心跳：每 5 秒发一次默认帧，保持水表唤醒
-    hb = Heartbeat(ser=conn.ser, lock=conn.io_lock, interval=5)
+    hb = Heartbeat(conn=conn, lock=conn.io_lock, interval=5)
     hb.start()
 
     try:
