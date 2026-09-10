@@ -60,7 +60,7 @@ def rate_switch_2():
             }
             date_ok = conn._set_obis("0.9.2", write_dict["0.9.2"])
             time_ok = conn._set_obis("0.9.1", write_dict["0.9.1"])
-            kf_info(f'校时至{format_date(date_ok)} {format_time(time_ok)}')
+            kf_info(f'校时至{format_date(write_dict["0.9.2"])} {format_time(write_dict["0.9.1"])}')
 
             if date_ok and time_ok:
                 kf_info("校时成功")
