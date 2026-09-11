@@ -1,22 +1,34 @@
-"""STS token generator per IEC 62055-41:2018 (EA07 / STA).
+"""STS 预付费充值凭证（Token）生成/解码工具。
 
-    python sts_token_recharge.py <key_hex> <tid> <subclass> <amount>
-      key_hex  : 16 hex chars (64-bit DecoderKey), e.g. E7B21AA9EC929C96
-      tid      : decimal, 0..16777215
-      subclass : 0-3 kind (0=electricity kWh, 1=water m3, 2=gas m3, 3=time min)
-                 4-7 currency (10^-5 base currency)
-      amount   : value in the main unit (kWh / m3 / ...); for subclass 0-3 the
-                 unit of credit is 0.1 of the main unit (rounds up to customer)
+    这是做"预付费"表计（电表/水表/气表）充值用的：
+    用户交钱后，后台按固定规则算出一串数字（Token），
+    往表里输入这串数字，表就按规定给你充值。
 
-    Class is fixed to 0 (TransferCredit), RND fixed to 5.
+    规则遵循国际标准 IEC 62055-41:2018（EA07 / STA），
+    用的是密钥(DecoderKey)加密，防止别人随便算出充值码。
 
-    Algorithm and tables validated against STSSimulator:
-        sub=1 amount=1 m3 -> 63525115892327740484
-        sub=0 amount=10 kWh -> 35500312443047940328
+    命令行用法：
+        python sts_token_recharge.py <key_hex> <tid> <subclass> <amount>
+      key_hex  : 16 位十六进制密钥（64位），例如 E7B21AA9EC929C96
+      tid      : 十进制的表计编号，范围 0..16777215
+      subclass : 充值类型
+                 0=电量(kWh)  1=水量(m3)  2=气量(m3)  3=时间(分钟)
+                 4=电费      5=水费      6=气费      7=时间金额
+                 （0-3 是"充了多少量"，4-7 是"充了多少钱"，钱按 1/100000 单位计）
+      amount   : 充值数额，按主单位输入（如 5 立方米就是 5）
+                 subclass 为 0-3 时，内部按主单位的 0.1 为基本计量单位，
+                 向上取整（取整按对用户有利的原则处理）
+
+    Class 固定为 0（即"充值得额"TransferCredit 类型），RND 固定为 5。
+
+    算法和查表结果已经对照标准模拟器 STSSimulator 验证过：
+        水量 sub=1 amount=1 m3        -> Token 63525115892327740484
+        电量 sub=0 amount=10 kWh      -> Token 35500312443047940328
 """
 
 import math
 import sys
+from datetime import datetime
 
 SUB1 = [14, 10, 7, 9, 12, 3, 2, 5, 13, 0, 15, 1, 4, 8, 6, 11]
 SUB2 = [12, 8, 2, 13, 7, 6, 1, 3, 11, 5, 9, 15, 0, 4, 10, 14]
@@ -151,6 +163,23 @@ def parse_key(key_hex):
     return int(s, 16)
 
 
+# TID 基准时间：2014-01-01 00:00:00（本地时区）
+_TID_EPOCH = datetime(2014, 1, 1, 0, 0, 0)
+
+
+def generate_tid() -> int:
+    """
+    以电脑当前时间为基准生成 TID（24 位，0..16777215）。
+    计算方法：自 2014-01-01 起经过的分钟数，取后 24 位。
+    （按每分钟 TID 加 1，约 32 年后才会用满 24 位）
+    返回 int。
+    示例：2026-09-03 12:00 -> 已过约 6.6M 分钟，TID 在 660 万左右
+    """
+    now = datetime.now()
+    total_minutes = int((now - _TID_EPOCH).total_seconds() // 60)
+    return total_minutes & 0xFFFFFF
+
+
 def generate_token(key_hex, tid, subclass, amount, token_class=0, rnd=5):
     """
     传入密钥, TID, 充值类型(subclass), 充值量(amount), 返回充值Token(不带空格)
@@ -228,7 +257,10 @@ if __name__ == '__main__':
                             ('35500312443047940328', 100, 0)]:
         d = decode_token(tok, 'E7B21AA9EC929C96')
         assert d['crc_ok'] and d['amount_field'] == field and d['subclass'] == sub
+    t = generate_tid()
+    assert isinstance(t, int) and 0 <= t <= 0xFFFFFF
     print('self-test OK')
+    print('generate_tid ->', t)
 
     if len(sys.argv) == 5:
         tok = generate_token(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), float(sys.argv[4]))

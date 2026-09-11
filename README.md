@@ -290,6 +290,12 @@
    - 含义：解码 Token，校验 CRC 并还原各字段
    - 返回：Dict，包含 class/subclass/rnd/tid/amount_field/crc_ok/units/amount
 
+   **generate_tid()**
+   - 含义：以电脑当前时间为基准生成 TID（int，24 位 0..16777215）
+   - 算法：自 2014-01-01 起经过的分钟数，取后 24 位（每分钟 TID+1）
+   - 返回：int
+   - 示例：`tid = generate_tid()`；配套使用 `generate_token(key, generate_tid(), 1, amount)`
+
    命令行直接使用：
 
        python sts_token_recharge.py <key_hex> <tid> <subclass> <amount>
