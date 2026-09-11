@@ -239,6 +239,22 @@
 - 已用假串口实测: 0.1s 间隔 0.35s 内正确发送 3 次、帧内容一致
 
 ========================================
+日期：2026-08-31
+========================================
+
+三十、新增 sts_token_recharge.py STS 充值 Token 生成/解码模块
+- 实现 IEC 62055-41:2018 (EA07 / STA) 标准的 STS token 算法
+- generate_token(key_hex, tid, subclass, amount): 传入密钥/TID/类型/充值量，
+  返回充值 Token 字符串。subclass: 0=电用量 1=水用量 2=气用量 3=时间，
+  4=电金额 5=水金额 6=气金额 7=时间金额
+- decode_token(token_64, key_hex): 传入 Token 和密钥，返回字典
+  (class/subclass/rnd/tid/amount_field/crc_ok/units/amount)
+- 内部含 sta_encrypt/sta_decrypt(16轮SPN网络)/amount_to_field/field_to_amount
+  /crc16_sts 等，算法已通过 STS Simulator 对照验证（水表 sub=1 amount=1m3
+  -> 63525115892327740484，电表 sub=0 amount=10kWh -> 35500312443047940328）
+- 也可命令行直接使用: python sts_token_recharge.py <key_hex> <tid> <subclass> <amount>
+
+========================================
 待办 / 已知问题
 ========================================
 - 跨月后立即重连偶发"密码校验失败"，已通过清空缓冲 + B0 后等待缓解；2026-08-22

@@ -25,11 +25,15 @@
    - 返回：客户端实例
    - 示例：`conn = IEC62056ModeE("com3")`
 
-   **iec_connect(password='00000000')**
-   - 含义：连接电表，依次完成 设备识别 -> 切换波特率/选择协议 -> 密码校验；密码失败自动重试 3 次（间隔 1s）
-   - 传参：password：str，密码，默认 '00000000'
+   **iec_connect(password='00000000', max_rounds=3)**
+   - 含义：连接电表，依次完成 设备识别 -> 切换波特率/选择协议 -> 密码校验
+   - 双层重试机制：
+     - 内层：同一轮内 P1 密码失败重试 3 次（间隔 1s，应对电表忙如零点冻结）
+     - 外层：整轮失败后回到 /?! 从头重新握手，最多 max_rounds 轮
+       （应对 ACK 051 协议选择丢失导致电表未进入编程模式，此时重试 P1 无用）
+   - 传参：password：str，默认 '00000000'；max_rounds：int，默认 3
    - 返回：(制造商, 波特率标识, 设备ID) 三元组，如 ('GML', '5', '2DTSY5558ver3.4')
-   - 异常：3 次密码校验均失败时抛出 RuntimeError("密码校验失败")
+   - 异常：全部轮次失败后抛出 RuntimeError("密码校验失败")
    - 注意：连接成功后必须调用 iec_disconnect() 断开，两者成对使用
 
    **iec_disconnect()**
@@ -110,11 +114,17 @@
    - 返回：str，"HHMMSS"
    - 示例：`midnight_time(-3)` -> `'235957'`
 
-   **last_day_of_month(date_str)**
-   - 含义：获取当月最后一天（自动处理大小月/闰年）
-   - 传参：date_str：str，"YY-MM-DD"
+   **last_day_of_month(date_str, offset_months=0)**
+   - 含义：获取当月（或偏移后月份）最后一天（自动处理大小月/闰年/跨年）
+   - 传参：date_str：str，"YY-MM-DD"；offset_months：int，默认 0，=1 未来一月，=-1 过去一月
    - 返回：str，"YYMMDD"
-   - 示例：`last_day_of_month('26-09-01')` -> `'260930'`
+   - 示例：`last_day_of_month('26-09-01')` -> `'260930'`；`last_day_of_month('26-09-01', 1)` -> `'261031'`
+
+   **first_day_of_month(date_str, offset_months=0)**
+   - 含义：获取当月（或偏移后月份）第一天，跨年自动进退位
+   - 传参：date_str：str，"YY-MM-DD"；offset_months：int，默认 0
+   - 返回：str，"YYMMDD"
+   - 示例：`first_day_of_month('26-09-03')` -> `'260901'`；`first_day_of_month('26-09-03', 1)` -> `'261001'`
 
    **format_date(date_str)**
    - 含义：日期格式转换
@@ -146,7 +156,9 @@
 
    ### 四、打印与日志（kf_IEC/kf_iec_info.py）
 
-   日志按小时分割，写入项目根目录 Log/YYYYMMDD_HH.log（固定位置，与脚本运行位置无关）。
+   日志按天分目录存放，路径格式：`Log/YYMMDD/YYYYMMDD_HH.log`
+   （如 26年8月26日的日志在 `Log/260826/20260826_13.log`），
+   固定在项目根目录下，与脚本运行位置无关；跨天时自动切换到新目录。
 
    **info(*args, **kwargs)**
    - 含义：仅控制台打印，用法与 print 完全相同
@@ -175,7 +187,7 @@
    - 含义：运行所有标签中包含 tag 的已注册脚本，按注册顺序依次执行
    - 传参：tag：str，标签名。传完整标签（如 'rate_switch_1'）只运行这一个脚本；传公共前缀标签（如 'rate_switch'）会运行所有带该标签的脚本
    - 返回：List[str]，实际运行的函数名列表；没有匹配时打印提示并返回空列表
-   - 失败隔离：单个脚本报错（含测试 Fail）会被捕获，打印 'xxx脚本测试Fail' 和失败原因后继续下一个脚本
+   - 失败隔离：单个脚本报错（含测试 Fail）会被捕获，打印 'xxx脚本测试Fail'、失败原因和完整错误位置（含出错文件与行号的 traceback）后继续下一个脚本
    - 注意：只对"已 import 过的文件"生效，适合单文件内直接运行
 
    **kf_test_fail(script_name)**
@@ -199,4 +211,87 @@
 
    修改 run_scripts.py 里的 tag 字符串即可切换"只跑单个脚本 / 跑一类脚本"。
 
-2. 
+   ---
+
+   ### 六、弹窗工具（kf_IEC/kf_popup.py）
+
+   基于 tkinter，无需额外安装依赖。三种弹窗对应三种交互需求：
+
+   **kf_alert(title, message)**
+   - 含义：非阻塞警告框，弹出后脚本照常运行，不等待用户
+   - 特性：新的 kf_alert/kf_prompt/kf_inquire 弹出时，上一个 kf_alert 自动关闭（令牌机制）
+   - 返回：无
+   - 示例：`kf_alert("提示", "正在执行第3步，请勿断电...")`
+
+   **kf_prompt(title, message)**
+   - 含义：阻塞提示框，脚本暂停，点击"确定"后才继续
+   - 返回：无
+   - 示例：`kf_prompt("操作提示", "请将串口切换到 COM5，然后点确定")`
+
+   **kf_inquire(title, message, ok_text="确定", cancel_text="取消")**
+   - 含义：阻塞询问框，可自定义两个按钮的文本；点击确定按钮返回 True，取消（或直接关窗）返回 False
+   - 返回：bool
+   - 示例：
+
+        if not kf_inquire("derusting_1_1", "水表是否动阀", "动了", "没动"):
+            kf_test_fail("derusting_1_1")   # 点"没动"判定失败
+
+   ---
+
+   ### 七、心跳模块（kf_IEC/kf_07_heartbeat.py）
+
+   场景：水表/电表会定时休眠，为避免手动唤醒，可在连接后启动一个后台线程按固定间隔发送心跳帧。
+
+   **Heartbeat(ser, lock, interval=5, frame=DEFAULT_HEARTBEAT_FRAME, name="kf_heartbeat")**
+   - 含义：固定间隔的心跳发送器
+   - 传参：
+     - ser：serial.Serial，与 IEC62056ModeE 共享的串口对象（conn.ser）
+     - lock：threading.Lock，与 conn.io_lock 共享的互斥锁，保证心跳与 IEC 收发串行、帧不交错
+     - interval：float，发送间隔（秒），默认 5
+     - frame：bytes，心跳帧内容，默认 `68 AA*6 68 13 00 DF 16`（645/97 风格读通讯地址）
+   - 方法：
+     - start()：启动后台守护线程，主进程退出自动结束
+     - stop(timeout=2)：停止心跳线程并等待退出
+     - send_once()：立即手动发送一次（可用于唤醒后首次衔接）
+
+   用法示例：
+
+       conn = IEC62056ModeE("com3")
+       conn.iec_connect()
+       hb = Heartbeat(ser=conn.ser, lock=conn.io_lock, interval=5)
+       hb.start()
+       try:
+           value = conn._read_obis("0.9.1")   # 会话内读表，与心跳自动串行
+           ...
+       finally:
+           hb.stop()
+           conn.iec_disconnect()
+
+   - 注意：串口字节宽度（7E1/8E1/8N1）由调用方自行切换管理，心跳只负责发送原始字节
+   - 提示：会话已建立时应使用内部方法 _read_obis/_set_obis（只读写、不接管连接），不要用 read_obis（它内部会再次连接并断开，与心跳冲突）
+
+   ---
+
+   ### 八、STS 充值 Token（kf_IEC/sts_token_recharge.py）
+
+   符合 IEC 62055-41:2018 (EA07 / STA) 标准的 STS Token 生成/解码。
+
+   **generate_token(key_hex, tid, subclass, amount, token_class=0, rnd=5)**
+   - 含义：生成充值 Token（固定 Class=0 TransferCredit，RND=5）
+   - 传参：
+     - key_hex：str，16 位十六进制密钥（64-bit DecoderKey），如 'E7B21AA9EC929C96'
+     - tid：int，0..16777215
+     - subclass：int，充值类型。0=电用量 1=水用量 2=气用量 3=时间；4=电金额 5=水金额 6=气金额 7=时间金额
+     - amount：float，充值量（主单位，如 kWh / m3）；subclass 0-3 的计量单位为主单位的 0.1（向上取整对客户有利）
+   - 返回：str，充值 Token（不带空格）
+   - 示例：`generate_token('E7B21AA9EC929C96', 6675056, 1, 1.0)` -> `'63525115892327740484'`
+
+   **decode_token(token_64, key_hex)**
+   - 含义：解码 Token，校验 CRC 并还原各字段
+   - 返回：Dict，包含 class/subclass/rnd/tid/amount_field/crc_ok/units/amount
+
+   命令行直接使用：
+
+       python sts_token_recharge.py <key_hex> <tid> <subclass> <amount>
+
+   算法已通过 STS Simulator 对照验证（self-test 内建断言）。 
