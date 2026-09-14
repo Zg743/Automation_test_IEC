@@ -18,4 +18,4 @@ from .kf_iec_tag import *
 from .kf_iec import *
 from .kf_popup import *
 from .kf_07_heartbeat import *
-from .sts_token_recharge import *
+from .kf_sts_token import *
