@@ -19,11 +19,16 @@
                  subclass 为 0-3 时，内部按主单位的 0.1 为基本计量单位，
                  向上取整（取整按对用户有利的原则处理）
 
-    Class 固定为 0（即"充值得额"TransferCredit 类型），RND 固定为 5。
+    Class 固定为 0（即"充值得额"TransferCredit 类型）。
+    RND：subclass 0-3 固定为 5；subclass 4-7（货币）不使用 RND，令牌内该 4 位恒 0
+         （与标准模拟器实测一致）。
+    CRC：subclass 0-3 用普通 CRC（IEC 62055-41 6.3.7）；subclass 4-7（货币信用）
+         用 CRC_C（6.3.22）——在左补零后的 56 位之后追加一个字节 0x01 再计算。
 
     算法和查表结果已经对照标准模拟器 STSSimulator 验证过：
         水量 sub=1 amount=1 m3        -> Token 63525115892327740484
         电量 sub=0 amount=10 kWh      -> Token 35500312443047940328
+        电费 sub=4 amount=100 (CRC_C) -> Token 07420412750539184100
 """
 
 import math
@@ -104,6 +109,18 @@ def crc16_sts(data_bytes, init=0xFFFF, poly=0xA001):
         for _ in range(8):
             crc = ((crc >> 1) ^ poly) & 0xFFFF if crc & 1 else (crc >> 1) & 0xFFFF
     return ((crc & 0xFF) << 8) | (crc >> 8)
+
+
+def crc_sts_for(subclass, bytes7):
+    """按 IEC 62055-41 计算 Class 0 令牌的校验和。
+
+    6.3.7  : 普通 CRC，对左补零后的 56 bit（7 字节）计算。
+    6.3.22 : Class 0 SubClass 4-7（货币信用）使用 CRC_C —— 与 6.3.7 相同，
+             但在计算前于 56 bit 值之后追加一个字节 0x01。
+    """
+    if 4 <= subclass <= 7:
+        return crc16_sts(bytes7 + b'\x01')
+    return crc16_sts(bytes7)
 
 
 def rotate_left_64(x, n=1):
@@ -236,6 +253,56 @@ def field_to_amount_units(field):
     return (10 ** e) * m + offset
 
 
+def currency_amount_encode(amount):
+    """Class 0 SubClass 4-7（货币）金额编码，见 IEC 62055-41 6.3.6.3。
+
+    与 subclass 0-3 不同，货币金额的指数 e 由 5 位组成：
+        e = e0 + 2*e1 + 4*e2 + 8*e3 + 16*e4   (0..31)
+    其中 e0、e1 在 16 位 Amount 字段的最高两位，e2、e3、e4 在 S&E 字段
+    （即原先 RND 的 4 位）里，S&E 的最高位 s 是符号（0=正，1=负）。
+        Amount 字段 = (e1<<15) | (e0<<14) | m
+        S&E 字段    = (s<<3) | (e4<<2) | (e3<<1) | e2
+    金额换算：t = 10^e * m + Σ(2^14 * 10^(n-1), n=1..e)，向上取整。
+
+    :return: (amount_field16, se4)
+    """
+    t = int(math.ceil(abs(amount) * 1e5))
+    s = 1 if amount < 0 else 0
+    for e in range(32):
+        offset = sum(16384 * (10 ** n) for n in range(e))
+        num = t - offset
+        if num <= 0:
+            m = 0
+        else:
+            m = (num + 10 ** e - 1) // (10 ** e)      # 向上取整
+        if m <= 0x3FFF:
+            field = (((e >> 1) & 1) << 15) | ((e & 1) << 14) | m
+            se = (s << 3) | (((e >> 4) & 1) << 2) | (((e >> 3) & 1) << 1) | ((e >> 2) & 1)
+            return field, se
+    raise ValueError('amount too large (exceeds currency field range)')
+
+
+def currency_amount_decode(field, se):
+    """currency_amount_encode 的逆运算。
+
+    :return: (amount, units, e, s)
+    """
+    e0 = (field >> 14) & 1
+    e1 = (field >> 15) & 1
+    m = field & 0x3FFF
+    s = (se >> 3) & 1
+    e2 = se & 1
+    e3 = (se >> 1) & 1
+    e4 = (se >> 2) & 1
+    e = e0 + 2 * e1 + 4 * e2 + 8 * e3 + 16 * e4
+    offset = sum(16384 * (10 ** n) for n in range(e))
+    units = (10 ** e) * m + offset
+    amount = units / 1e5
+    if s:
+        amount = -amount
+    return amount, units, e, s
+
+
 def parse_key(key_hex):
     """把 16 位十六进制密钥字符串解析成 64 位整数密钥。
 
@@ -288,13 +355,18 @@ def generate_token(key_hex, tid, subclass, amount, token_class=0, rnd=5):
         raise ValueError('tid must be 0..16777215')
     if not 0 <= subclass <= 15:
         raise ValueError('subclass must be 0..15')
-    field = amount_to_field(amount, subclass)
-    pre = (token_class << 48) | (subclass << 44) | (rnd << 40) | ((tid & 0xFFFFFF) << 16) | field
+    if 4 <= subclass <= 7:
+        # 货币信用：用扩展指数编码，S&E 占原先 RND 的 4 位（见 6.3.6.3 / 6.3.21）
+        field, used_rnd = currency_amount_encode(amount)
+    else:
+        field = amount_to_field(amount, subclass)
+        used_rnd = rnd
+    pre = (token_class << 48) | (subclass << 44) | (used_rnd << 40) | ((tid & 0xFFFFFF) << 16) | field
     bytes7 = int(bin(pre)[2:].zfill(50).zfill(56), 2).to_bytes(7, 'big')
-    crc = crc16_sts(bytes7)
-    data64 = (subclass << 60) | (rnd << 56) | ((tid & 0xFFFFFF) << 32) | (field << 16) | crc
+    crc = crc_sts_for(subclass, bytes7)
+    data64 = (subclass << 60) | (used_rnd << 56) | ((tid & 0xFFFFFF) << 32) | (field << 16) | crc
     enc = sta_encrypt(data64, key)
-    return str(insert_class_bits(enc, token_class))
+    return str(insert_class_bits(enc, token_class)).zfill(20)
 
 
 def decode_token(token_64, key_hex, sub1=SUB1, sub2=SUB2, perm=PERM):
@@ -322,10 +394,14 @@ def decode_token(token_64, key_hex, sub1=SUB1, sub2=SUB2, perm=PERM):
     crc_in = db & 0xFFFF
     pre = (token_class << 48) | (subclass << 44) | (rnd << 40) | (tid << 16) | field
     bytes7 = int(bin(pre)[2:].zfill(50).zfill(56), 2).to_bytes(7, 'big')
-    crc_calc = crc16_sts(bytes7)
-    units = field_to_amount_units(field)
-    divisor = 10.0 if subclass <= 3 else 1e5
-    amount = units / divisor
+    crc_calc = crc_sts_for(subclass, bytes7)
+    if 4 <= subclass <= 7:
+        amount, units, exponent, sign = currency_amount_decode(field, rnd)
+    else:
+        units = field_to_amount_units(field)
+        amount = units / 10.0
+        exponent = None
+        sign = 0
     return {
         'class': token_class,
         'subclass': subclass,
@@ -335,6 +411,8 @@ def decode_token(token_64, key_hex, sub1=SUB1, sub2=SUB2, perm=PERM):
         'crc_ok': crc_in == crc_calc,
         'units': units,
         'amount': amount,
+        'exponent': exponent,
+        'sign': sign,
     }
 
 def generate_meter_specific(key_hex, tid, subclass, value, rnd=5):
@@ -366,7 +444,7 @@ def generate_meter_specific(key_hex, tid, subclass, value, rnd=5):
     # 组装 64-bit 加密数据块并代入 STA 加密,最后把 Class 位插入为 66 位令牌
     data64 = (subclass << 60) | (rnd << 56) | ((tid & 0xFFFFFF) << 32) | (value << 16) | crc
     enc = sta_encrypt(data64, key)
-    return str(insert_class_bits(enc, token_class))
+    return str(insert_class_bits(enc, token_class)).zfill(20)
 
 
 def generate_clear_credit_token(key_hex, tid, register=0, rnd=5):
@@ -457,15 +535,15 @@ if __name__ == "__main__":
     tid1 = generate_tid()
     print(f"生成的tid为: {tid1}")
     tid2 = 6680788
-    clear_credit_token = generate_clear_credit_token(meter_key, tid2, 1)
-    clear_tamper_token = generate_clear_tamper_token(meter_key, tid2)
-    recharge_token = generate_token(meter_key, tid2, 4, 100)
+    # clear_credit_token = generate_clear_credit_token(meter_key, tid2, 1)
+    # clear_tamper_token = generate_clear_tamper_token(meter_key, tid2)
+    recharge_token = generate_token(meter_key, tid2, 4, 50000)
 
-    print(f"生成的清余额的Token为: {clear_credit_token}")
-    print(f"生成的清窃电的Token为: {clear_tamper_token}")
+    # print(f"生成的清余额的Token为: {clear_credit_token}")
+    # print(f"生成的清窃电的Token为: {clear_tamper_token}")
     print(f"生成的充值水量的Token为: {recharge_token}")
 
-    print(f"生成的Token数据类型为: {type(clear_credit_token)}")
+    # print(f"生成的Token数据类型为: {type(clear_credit_token)}")
 
     # assert clear_credit_token == "64780804373480967093"
     # assert clear_tamper_token == "12707367341805666529"
@@ -477,11 +555,11 @@ if __name__ == "__main__":
     result = decode_token(recharge_token, meter_key)
     print(result)
     # 解清余额Token:
-    result = decode_meter_specific(clear_credit_token, meter_key)
-    print(result)
-    # 解清窃电Token:
-    result = decode_meter_specific(clear_tamper_token, meter_key)
-    print(result)
+    # result = decode_meter_specific(clear_credit_token, meter_key)
+    # print(result)
+    # # 解清窃电Token:
+    # result = decode_meter_specific(clear_tamper_token, meter_key)
+    # print(result)
 
     # # 尝试通用解析:
     # result = decode_meter_specific(recharge_token, meter_key)
