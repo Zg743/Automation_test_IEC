@@ -1,6 +1,6 @@
 from random import randint
 
-from kf import *
+from kf_IEC import *
 
 
 
