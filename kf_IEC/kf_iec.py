@@ -16,6 +16,16 @@ _CTRL_NAMES = {
     0x15: '<NAK>', 0x1B: '<ESC>',
 }
 
+
+class Result:
+    def __init__(self, status, value=None):
+        self.status = status
+        self.value = value
+
+    def __repr__(self):
+        return f"Result(status={self.status!r}, value={self.value!r})"
+
+
 class IEC62056ModeE:
     """IEC 62056-21 Mode E 抄表客户端"""
 
@@ -185,6 +195,10 @@ class IEC62056ModeE:
         # 格式: OBIS(值) 或 OBIS(值*单位)，多值形如 OBIS(值1)(值2)...
         match = re.match(r'([\w\.]+)', text)
         if not match:
+            # 无 OBIS 前缀，直接提取括号内容作为值（如错误码 (ER05)）
+            values = re.findall(r'\(([^)]*)\)', text)
+            if values:
+                return '', ';'.join(values)
             return text, ''
         obis = match.group(1)
         values = re.findall(r'\(([^)]*)\)', text[len(obis):])
@@ -298,10 +312,10 @@ class IEC62056ModeE:
         finally:
             self.iec_disconnect()
 
-    def set_obis(self, obis_code: str, value: str) -> bool:
+    def set_obis(self, obis_code: str, value: str) -> Result:
         """
         外部使用：连接电表 -> 写入单个 OBIS 值 -> 断开会话
-        返回 True 表示收到 ACK 写入成功
+        返回 Result(status, value)，status=True 表示收到 ACK 写入成功
         """
         self.iec_connect()
         try:
@@ -309,10 +323,10 @@ class IEC62056ModeE:
         finally:
             self.iec_disconnect()
 
-    def _set_obis(self, obis_code: str, value: str) -> bool:
+    def _set_obis(self, obis_code: str, value: str) -> Result:
         """
         内部使用：在已建立的会话中写入单个 OBIS 值，不负责连接/断开
-        返回 True 表示收到 ACK 写入成功
+        返回 Result(status, value)
         """
         self._iec_active = True
         try:
@@ -326,14 +340,23 @@ class IEC62056ModeE:
             self.ser.reset_input_buffer()
             self._send(frame)
             resp = self._read_frame()
-            return resp == b'\x06'
+            if resp == b'\x06':
+                return Result(True, 'ACK')
+            if resp and resp[0] in (0x01, 0x02):
+                _, parsed = self._parse_data_block(resp)
+                return Result(False, f'数据帧而非ACK: {parsed}')
+            if resp is None:
+                return Result(False, '超时无响应')
+            else:
+                return Result(False, f'异常响应: {resp.hex()}')
         finally:
             self._iec_active = False
 
-    def set_obis_dict(self, data_dict: Dict[str, str]) -> Dict[str, bool]:
+
+    def set_obis_dict(self, data_dict: Dict[str, str]) -> Dict[str, Result]:
         """
         批量写入：传入 {obis: 写入数据} 字典
-        返回 {obis: 是否写入成功}
+        返回 {obis: Result(status, value)}
         """
         self.iec_connect()
         results = {}
@@ -341,10 +364,7 @@ class IEC62056ModeE:
             for obis, value in data_dict.items():
                 result = self._set_obis(obis, value)
                 results[obis] = result
-                if result:
-                    status = "成功"
-                else:
-                    status = "失败"
+                status = "成功" if result.status else "失败"
                 message = f"写入结果: {obis} = {value} -> {status}"
                 kf_info(message)
             return results
