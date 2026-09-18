@@ -403,8 +403,8 @@ def decode_token(token_64, key_hex, sub1=SUB1, sub2=SUB2, perm=PERM):
         exponent = None
         sign = 0
     return {
-        'class': token_class,
-        'subclass': subclass,
+        'class': Token_class[token_class],
+        'subclass': Token_subclass_class0[subclass],
         'rnd': rnd,
         'tid': tid,
         'amount_field': field,
